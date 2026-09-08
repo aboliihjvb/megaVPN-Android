@@ -1,12 +1,9 @@
 name: MegaVPN test APK
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
-    inputs:
-      subscription_url:
-        description: 'VLESS subscription URL (used only while building the APK; never committed)'
-        required: true
-        type: string
 
 permissions:
   contents: read
@@ -14,8 +11,6 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-24.04
-    env:
-      MEGAVPN_SUBSCRIPTION_URL: ${{ inputs.subscription_url }}
     steps:
       - name: Checkout MegaVPN source
         uses: actions/checkout@v4
@@ -36,16 +31,10 @@ jobs:
           curl -fL https://jitpack.io/com/github/singbox-android/libbox/1.13.14/libbox-1.13.14.aar \
             -o build/pulse/app/libs/libbox.aar
 
-      - name: Install MegaVPN one-button UI
+      - name: Install MegaVPN one-button UI and test subscription
         run: |
           cp src/MegaMainActivity.kt build/pulse/app/src/main/kotlin/com/andrew/proxyapp/MainActivity.kt
-          python3 - <<'PY'
-          import os, json
-          from pathlib import Path
-          value = os.environ['MEGAVPN_SUBSCRIPTION_URL']
-          text = 'package com.andrew.proxyapp\n\nobject MegaBuildConfig {\n    const val SUBSCRIPTION_URL: String = ' + json.dumps(value) + '\n}\n'
-          Path('build/pulse/app/src/main/kotlin/com/andrew/proxyapp/MegaBuildConfig.kt').write_text(text, encoding='utf-8')
-          PY
+          cp src/MegaBuildConfig.kt build/pulse/app/src/main/kotlin/com/andrew/proxyapp/MegaBuildConfig.kt
           grep -RIl --exclude-dir=.git 'Pulse' build/pulse/app/src/main 2>/dev/null | while read f; do
             sed -i 's/Pulse/MegaVPN/g' "$f"
           done
