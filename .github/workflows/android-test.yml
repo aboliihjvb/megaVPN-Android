@@ -5,6 +5,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+env:
+  MEGAVPN_ADMIN_API_URL: ${{ secrets.MEGAVPN_ADMIN_API_URL }}
+
 permissions:
   contents: read
   actions: write
@@ -39,6 +42,19 @@ jobs:
           cp src/EmbeddedUriParser.kt build/pulse/app/src/main/kotlin/com/andrew/proxyapp/data/EmbeddedUriParser.kt
           python3 - <<'PY'
           from pathlib import Path
+          import os
+          cfg = Path('build/pulse/app/src/main/kotlin/com/andrew/proxyapp/MegaBuildConfig.kt')
+          s = cfg.read_text()
+          admin = os.environ.get('MEGAVPN_ADMIN_API_URL', '').strip()
+          if admin:
+              s = s.replace('const val ADMIN_API_URL: String = ""', 'const val ADMIN_API_URL: String = ' + repr(admin))
+          cfg.write_text(s)
+
+          p = Path('build/pulse/app/src/main/kotlin/com/andrew/proxyapp/MainActivity.kt')
+          s = p.read_text()
+          s = s.replace('MegaBuildConfig.SUBSCRIPTION_URL', 'MegaBuildConfig.effectiveSubscriptionUrl()')
+          p.write_text(s)
+
           p = Path('build/pulse/app/src/main/kotlin/com/andrew/proxyapp/data/SubscriptionManager.kt')
           s = p.read_text()
           s = s.replace('        val result = when (detected) {', '        var result = when (detected) {', 1)
