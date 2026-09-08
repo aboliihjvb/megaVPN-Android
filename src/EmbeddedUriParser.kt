@@ -7,7 +7,7 @@ import java.nio.charset.StandardCharsets
 /**
  * Compatibility parser for subscriptions wrapped in JSON/text/URL encoding/Base64.
  * Native parsers run first; this parser also handles concatenated V2Ray/Xray JSON
- * client configurations, which are commonly returned one after another.
+ * client configurations.
  */
 object EmbeddedUriParser {
     private val uriPattern = Regex(
@@ -24,20 +24,12 @@ object EmbeddedUriParser {
             addTextVariants(current, candidates, queue)
         }
 
-        // First-class support for one or many V2Ray/Xray JSON objects concatenated
-        // together (the format used by the test data). Each object is delegated to
-        // the existing audited V2RayJsonParser so stream/TLS fields are preserved.
         val jsonNodes = mutableListOf<ProxyConfig>()
-        val jsonIssues = mutableListOf<ParseIssue>()
         candidates.forEach { text ->
-            extractJsonObjects(text).forEachIndexed { index, json ->
+            extractJsonObjects(text).forEach { json ->
                 val parsed = runCatching { V2RayJsonParser.parse(json, subscriptionId) }.getOrNull()
                 if (parsed != null && parsed.nodes.isNotEmpty()) {
                     jsonNodes += parsed.nodes
-                } else if (parsed != null && parsed.issues.isNotEmpty()) {
-                    jsonIssues += parsed.issues.map { issue ->
-                        issue.copy(line = index)
-                    }
                 }
             }
         }
@@ -46,7 +38,6 @@ object EmbeddedUriParser {
                 .map { StandardNodeMapper.normalize(it, subscriptionId, SubscriptionFormat.V2RAY_JSON) }
                 .distinctBy { "${it.protocol}:${it.server}:${it.port}:${it.name}" }
             return StandardNodeMapper.result(normalized, SubscriptionFormat.V2RAY_JSON)
-                .copy(issues = jsonIssues)
         }
 
         val matches = candidates.flatMap { extractUris(it) }.distinct()
@@ -95,7 +86,6 @@ object EmbeddedUriParser {
     private fun extractUris(text: String): List<String> =
         uriPattern.findAll(normalize(text)).map { cleanupUri(it.value) }.filter { it.length > 12 }.toList()
 
-    /** Extract balanced top-level JSON objects without requiring the whole response to be valid JSON. */
     private fun extractJsonObjects(text: String): List<String> {
         val result = mutableListOf<String>()
         var start = -1
