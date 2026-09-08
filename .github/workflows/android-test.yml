@@ -1,9 +1,12 @@
-name: Android test APK
+name: MegaVPN test APK
 
 on:
-  push:
-    branches: [ main ]
   workflow_dispatch:
+    inputs:
+      subscription_url:
+        description: 'VLESS subscription URL (used only while building the APK; never committed)'
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -11,8 +14,10 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-24.04
+    env:
+      MEGAVPN_SUBSCRIPTION_URL: ${{ inputs.subscription_url }}
     steps:
-      - name: Checkout MegaVPN repository
+      - name: Checkout MegaVPN source
         uses: actions/checkout@v4
 
       - name: Set up JDK 17
@@ -24,17 +29,24 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Download temporary open-source test client
+      - name: Fetch open-source sing-box Android base
         run: |
           git clone --depth 1 https://github.com/AndrewYeah/pulse.git build/pulse
           mkdir -p build/pulse/app/libs
           curl -fL https://jitpack.io/com/github/singbox-android/libbox/1.13.14/libbox-1.13.14.aar \
             -o build/pulse/app/libs/libbox.aar
 
-      - name: Apply MegaVPN test branding
-        working-directory: build/pulse
+      - name: Install MegaVPN one-button UI
         run: |
-          grep -RIl --exclude-dir=.git 'Pulse' app/src/main 2>/dev/null | while read f; do
+          cp src/MegaMainActivity.kt build/pulse/app/src/main/kotlin/com/andrew/proxyapp/MainActivity.kt
+          python3 - <<'PY'
+          import os, json
+          from pathlib import Path
+          value = os.environ['MEGAVPN_SUBSCRIPTION_URL']
+          text = 'package com.andrew.proxyapp\n\nobject MegaBuildConfig {\n    const val SUBSCRIPTION_URL: String = ' + json.dumps(value) + '\n}\n'
+          Path('build/pulse/app/src/main/kotlin/com/andrew/proxyapp/MegaBuildConfig.kt').write_text(text, encoding='utf-8')
+          PY
+          grep -RIl --exclude-dir=.git 'Pulse' build/pulse/app/src/main 2>/dev/null | while read f; do
             sed -i 's/Pulse/MegaVPN/g' "$f"
           done
 
@@ -42,9 +54,9 @@ jobs:
         working-directory: build/pulse
         run: chmod +x gradlew && ./gradlew clean assembleDebug --no-daemon --no-build-cache
 
-      - name: Upload test APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: MegaVPN-test-apk
+          name: MegaVPN-one-button-apk
           path: build/pulse/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
