@@ -31,10 +31,23 @@ jobs:
           curl -fL https://jitpack.io/com/github/singbox-android/libbox/1.13.14/libbox-1.13.14.aar \
             -o build/pulse/app/libs/libbox.aar
 
-      - name: Install MegaVPN one-button UI and test subscription
+      - name: Install MegaVPN UI and subscription compatibility layer
         run: |
           cp src/MegaMainActivity.kt build/pulse/app/src/main/kotlin/com/andrew/proxyapp/MainActivity.kt
           cp src/MegaBuildConfig.kt build/pulse/app/src/main/kotlin/com/andrew/proxyapp/MegaBuildConfig.kt
+          cp src/EmbeddedUriParser.kt build/pulse/app/src/main/kotlin/com/andrew/proxyapp/data/EmbeddedUriParser.kt
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('build/pulse/app/src/main/kotlin/com/andrew/proxyapp/data/SubscriptionManager.kt')
+          s = p.read_text()
+          marker = '''        val stableNodes = result.nodes.map { config ->\n'''
+          injection = '''        // Compatibility fallback: some providers wrap VLESS/VMess/etc. URIs\n        // inside JSON, text, or another envelope. Keep the existing parsers first,\n        // then extract only recognized proxy URIs as a safe last resort.\n        if (result.nodes.isEmpty()) {\n            val fallback = EmbeddedUriParser.parse(normalizedContent, subscriptionId)\n            if (fallback.nodes.isNotEmpty()) result = fallback\n        }\n\n'''
+          if injection.strip() not in s:
+              if marker not in s:
+                  raise SystemExit('SubscriptionManager patch marker not found')
+              s = s.replace(marker, injection + marker, 1)
+          p.write_text(s)
+          PY
           grep -RIl --exclude-dir=.git 'Pulse' build/pulse/app/src/main 2>/dev/null | while read f; do
             sed -i 's/Pulse/MegaVPN/g' "$f"
           done
