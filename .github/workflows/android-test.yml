@@ -1,0 +1,50 @@
+name: Android test APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout MegaVPN repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Download temporary open-source test client
+        run: |
+          git clone --depth 1 https://github.com/AndrewYeah/pulse.git build/pulse
+          mkdir -p build/pulse/app/libs
+          curl -fL https://jitpack.io/com/github/singbox-android/libbox/1.13.14/libbox-1.13.14.aar \
+            -o build/pulse/app/libs/libbox.aar
+
+      - name: Apply MegaVPN test branding
+        working-directory: build/pulse
+        run: |
+          grep -RIl --exclude-dir=.git 'Pulse' app/src/main 2>/dev/null | while read f; do
+            sed -i 's/Pulse/MegaVPN/g' "$f"
+          done
+
+      - name: Build debug APK
+        working-directory: build/pulse
+        run: chmod +x gradlew && ./gradlew clean assembleDebug --no-daemon --no-build-cache
+
+      - name: Upload test APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: MegaVPN-test-apk
+          path: build/pulse/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
