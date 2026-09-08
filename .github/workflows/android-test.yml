@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  actions: write
 
 jobs:
   build:
@@ -40,8 +41,9 @@ jobs:
           from pathlib import Path
           p = Path('build/pulse/app/src/main/kotlin/com/andrew/proxyapp/data/SubscriptionManager.kt')
           s = p.read_text()
+          s = s.replace('        val result = when (detected) {', '        var result = when (detected) {', 1)
           marker = '''        val stableNodes = result.nodes.map { config ->\n'''
-          injection = '''        // Compatibility fallback: some providers wrap VLESS/VMess/etc. URIs\n        // inside JSON, text, or another envelope. Keep the existing parsers first,\n        // then extract only recognized proxy URIs as a safe last resort.\n        if (result.nodes.isEmpty()) {\n            val fallback = EmbeddedUriParser.parse(normalizedContent, subscriptionId)\n            if (fallback.nodes.isNotEmpty()) result = fallback\n        }\n\n'''
+          injection = '''        // Compatibility fallback: some providers wrap proxy URIs in an envelope.\n        // Keep native parsers first, then extract only recognized proxy URI schemes.\n        if (result.nodes.isEmpty()) {\n            val fallback = EmbeddedUriParser.parse(normalizedContent, subscriptionId)\n            if (fallback.nodes.isNotEmpty()) result = fallback\n        }\n\n'''
           if injection.strip() not in s:
               if marker not in s:
                   raise SystemExit('SubscriptionManager patch marker not found')
@@ -62,3 +64,17 @@ jobs:
           name: MegaVPN-one-button-apk
           path: build/pulse/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+          retention-days: 7
+
+      - name: Remove older MegaVPN artifacts and runs
+        if: success()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" --jq '.artifacts[] | select(.name == "MegaVPN-one-button-apk" and .workflow_run.id != '${GITHUB_RUN_ID}') | .id' | while read id; do
+            gh api --method DELETE "repos/${GITHUB_REPOSITORY}/actions/artifacts/$id" || true
+          done
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/workflows/android-test.yml/runs?per_page=100" --jq '.workflow_runs[] | select(.id != '${GITHUB_RUN_ID}') | .id' | while read id; do
+            gh api --method DELETE "repos/${GITHUB_REPOSITORY}/actions/runs/$id" || true
+          done
