@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MegaVPN Admin</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#07162f;color:#fff;min-height:100vh}header{padding:24px 6%;display:flex;justify-content:space-between;align-items:center;background:linear-gradient(135deg,#0b2f67,#08142b);position:sticky;top:0;z-index:2}h1{margin:0;font-size:25px}.pill{background:#ffffff16;border:1px solid #ffffff20;border-radius:999px;padding:9px 14px;font-size:12px}.wrap{max-width:1100px;margin:auto;padding:28px 18px}.grid{display:grid;grid-template-columns:1fr 1.5fr;gap:18px}@media(max-width:800px){.grid{grid-template-columns:1fr}}.card{background:#ffffff0b;border:1px solid #ffffff14;border-radius:24px;padding:20px;box-shadow:0 15px 45px #0004}label{display:block;font-size:12px;color:#b9c8df;margin:12px 0 6px}input,select,textarea{width:100%;background:#061127;color:#fff;border:1px solid #ffffff1c;border-radius:14px;padding:13px;font:inherit;outline:none}textarea{min-height:240px;resize:vertical}button{border:0;border-radius:14px;padding:12px 17px;font-weight:700;cursor:pointer;background:#f78323;color:white;margin-top:12px}button.alt{background:#ffffff12}button.danger{background:#a92e3c}.row{display:flex;gap:9px;align-items:center;flex-wrap:wrap}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px}.stat{background:#ffffff08;border-radius:17px;padding:15px}.stat b{display:block;font-size:22px;margin-top:5px}.item{padding:15px;border:1px solid #ffffff12;border-radius:17px;margin-top:10px;background:#061127}.item strong{display:block}.muted{color:#aab9d0;font-size:12px}.ok{color:#52e29a}.off{color:#ffb65b}.hidden{display:none}.topline{display:flex;justify-content:space-between;gap:10px;align-items:center}.notice{padding:12px 14px;border-radius:14px;background:#f7832315;color:#ffd09d;margin-bottom:15px;font-size:12px}
+</style></head>
+<body>
+<header><h1>⚡ MegaVPN Admin</h1><span class="pill">مدیریت کانفیگ و سرورها</span></header>
+<div class="wrap">
+<div id="login" class="card"><h2>ورود مدیر</h2><p class="muted">توکن مدیریت را وارد کنید. این توکن فقط در همین مرورگر نگه داشته می‌شود.</p><input id="token" type="password" placeholder="ADMIN TOKEN"><button onclick="login()">ورود به پنل</button></div>
+<div id="app" class="hidden">
+<div class="notice">هر نوع متن اشتراک قابل استفاده است: VLESS / VMess / Trojan / Shadowsocks / Hysteria / TUIC، Base64، URI و V2Ray/Xray JSON. محتوای خام کانفیگ در پنل نمایش داده نمی‌شود مگر هنگام ویرایش.</div>
+<div class="stats"><div class="stat">کل کانفیگ‌ها<b id="total">0</b></div><div class="stat">فعال<b id="active">0</b></div><div class="stat">وضعیت API<b class="ok">ONLINE</b></div></div>
+<div class="grid">
+<section class="card"><div class="topline"><h2>افزودن / ویرایش</h2><span class="pill">Auto Parse</span></div>
+<input id="id" type="hidden"><label>نام</label><input id="name" placeholder="مثلاً سرورهای اصلی">
+<label>نوع</label><select id="type"><option value="auto">Auto</option><option>VLESS</option><option>VMess</option><option>Trojan</option><option>Hysteria2</option><option>Mixed</option><option>V2Ray JSON</option><option>Subscription</option></select>
+<label>کانفیگ / لینک / JSON / Base64</label><textarea id="content" placeholder="اینجا Paste کن..."></textarea>
+<div class="row"><button onclick="save()">ذخیره کانفیگ</button><button class="alt" onclick="clearForm()">پاک کردن فرم</button></div></section>
+<section class="card"><div class="topline"><h2>لیست سرورها</h2><button class="alt" onclick="load()">↻ بروزرسانی</button></div><div id="list"></div></section>
+</div></div></div>
+<script>
+let token=sessionStorage.getItem('mega_admin_token')||'';
+const $=id=>document.getElementById(id);
+function headers(){return {'authorization':'Bearer '+token,'content-type':'application/json'}}
+function login(){token=$('token').value.trim();if(!token)return;sessionStorage.setItem('mega_admin_token',token);$('login').classList.add('hidden');$('app').classList.remove('hidden');load()}
+async function api(path,opt={}){const r=await fetch(path,{...opt,headers:{...headers(),...(opt.headers||{})}});if(r.status===401){sessionStorage.removeItem('mega_admin_token');location.reload()}return r}
+async function load(){const r=await api('/api/configs');const d=await r.json();const a=d.configs||[];$('total').textContent=a.length;$('active').textContent=a.filter(x=>x.enabled).length;$('list').innerHTML=a.length?a.map(x=>`<div class="item"><strong>${esc(x.name)}</strong><span class="muted">${esc(x.type)} • ${x.enabled?'فعال':'خاموش'}</span><div class="row"><button class="alt" onclick='edit(${JSON.stringify(x)})'>ویرایش</button><button class="danger" onclick="del('${x.id}')">حذف</button></div></div>`).join(''):'<p class="muted">هنوز کانفیگی اضافه نشده.</p>'}
+function edit(x){$('id').value=x.id;$('name').value=x.name;$('type').value=x.type;$('content').value=x.content;scrollTo({top:0,behavior:'smooth'})}
+async function save(){if(!$('name').value.trim()||!$('content').value.trim())return alert('نام و محتوا را وارد کن');const body={id:$('id').value||undefined,name:$('name').value.trim(),type:$('type').value,content:$('content').value,enabled:true};const r=await api('/api/configs',{method:'POST',body:JSON.stringify(body)});if(!r.ok)return alert('ذخیره ناموفق بود');clearForm();load()}
+async function del(id){if(!confirm('این کانفیگ حذف شود؟'))return;await api('/api/configs/'+encodeURIComponent(id),{method:'DELETE'});load()}
+function clearForm(){$('id').value='';$('name').value='';$('content').value='';$('type').value='auto'}
+function esc(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+if(token){$('login').classList.add('hidden');$('app').classList.remove('hidden');load()}
+</script></body></html>
