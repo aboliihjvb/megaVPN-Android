@@ -1,0 +1,5 @@
+PAK TEST FILES
+
+Upload your .pak test file into this folder using GitHub's web upload interface.
+
+After upload, tell ChatGPT that the file is there. The GitHub connector may not be able to read binary PAK contents directly, so if direct inspection fails, upload the PAK file in the chat as well.
