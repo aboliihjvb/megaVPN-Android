@@ -1,0 +1,45 @@
+name: Deploy MegaVPN Admin
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      MEGAVPN_ADMIN_TOKEN: ${{ secrets.MEGAVPN_ADMIN_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Wrangler
+        run: npm install --global wrangler@4
+
+      - name: Embed admin panel
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+          html = Path('admin/index.html').read_text(encoding='utf-8')
+          worker = Path('admin/worker.js')
+          s = worker.read_text(encoding='utf-8')
+          marker = 'const ADMIN_HTML = `__ADMIN_HTML__`;'
+          if marker not in s:
+              raise SystemExit('Admin HTML placeholder not found')
+          embedded = 'const ADMIN_HTML = ' + json.dumps(html, ensure_ascii=False) + ';'
+          worker.write_text(s.replace(marker, embedded, 1), encoding='utf-8')
+          PY
+
+      - name: Apply D1 schema
+        run: wrangler d1 execute megavpn --remote --file=admin/schema.sql --config=admin/wrangler.toml --yes
+
+      - name: Set admin token
+        run: printf '%s' "$MEGAVPN_ADMIN_TOKEN" | wrangler secret put ADMIN_TOKEN --config=admin/wrangler.toml
+
+      - name: Deploy Worker
+        run: wrangler deploy --config=admin/wrangler.toml
