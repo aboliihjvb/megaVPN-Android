@@ -1,24 +1,30 @@
-# ZONE PAK TOOL v0.1
+# ZONE PAK TOOL v0.2
 
-A small Android/Termux CLI front-end for working with Unreal Engine PAK files.
+ابزار خط فرمان برای Termux/Android جهت کار با Unreal Engine PAK، با رابط منویی مشابه ابزار نمونه.
 
-## Run
-
+## نصب در Termux
 ```bash
 pkg update
-pkg install python
+pkg install python git
+cd ~
+git clone -b zone-pak-tool-v0.2 https://github.com/aboliihjvb/megaVPN-Android.git
+cd megaVPN-Android/zone-pak-tool
 python zone_tool.py
 ```
 
-## Features
+## قابلیت‌ها
+- UNPACK PAK
+- INJECT / EDIT (آماده‌سازی پوشه برای ویرایش)
+- REPACK FULL
+- REPACK TO PATH
+- BUILD NEW PAK
+- DELETE FOLDER با تأیید
+- SETTINGS برای ثبت مسیر UnrealPak
+- نمایش خروجی و خطای واقعی UnrealPak
+- بکاپ خودکار هنگام جایگزینی PAK موجود
+- ثبت لاگ در `~/.zone_pak_tool/zone_tool.log`
 
-- Unpack PAK
-- Edit extracted files
-- Repack/build PAK
-- Delete working folders
-- Configure the UnrealPak executable path
-- Safe placeholder for protection functionality
+## نکته مهم
+این ابزار خودش parser کامل PAK نیست و برای Extract/Create به یک **UnrealPak سازگار با نسخه PAK بازی** نیاز دارد. UnrealPak را از منبع/SDK مجاز پروژه یا بازی خودت تهیه کن و مسیر آن را از گزینه Settings ثبت کن.
 
-## Important
-
-The tool is a front-end and requires a compatible `UnrealPak` executable for real PAK processing. Compatibility depends on the target Unreal Engine/game version. This project does not bypass anti-cheat, authentication, or other game security controls.
+گزینه Protect عمداً عملیات رمزگذاری، خراب‌کردن فایل یا دورزدن محافظت بازی را انجام نمی‌دهد.
