@@ -1,126 +1,173 @@
 #!/usr/bin/env python3
-"""ZONE PAK TOOL - Android/Termux starter.
-
-This is a generic PAK workflow front-end. It delegates actual Unreal PAK
-processing to a user-supplied UnrealPak executable; it does not bypass game
-security or anti-cheat protections.
-"""
-import os
-import shutil
-import subprocess
+"""ZONE PAK TOOL v0.2 - Termux helper for Unreal Engine PAK workflows."""
+from __future__ import annotations
+import json, os, shutil, subprocess, sys, time
 from pathlib import Path
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 CONFIG = Path.home() / ".zone_pak_tool"
+LOG = CONFIG / "zone_tool.log"
+DEFAULT_ROOT = Path.home() / "zone-pak-work"
 
 
-def clear():
-    os.system("clear")
+def setup():
+    CONFIG.mkdir(parents=True, exist_ok=True)
+    DEFAULT_ROOT.mkdir(parents=True, exist_ok=True)
 
 
-def banner():
-    print("\033[96m" + "=" * 58)
-    print("                 ZONE PAK TOOL")
-    print(f"                 Android / Termux  v{VERSION}")
-    print("=" * 58 + "\033[0m")
+def log(msg: str):
+    CONFIG.mkdir(parents=True, exist_ok=True)
+    with LOG.open("a", encoding="utf-8") as f:
+        f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {msg}\n")
 
 
-def get_unrealpak():
-    if CONFIG.exists():
-        value = CONFIG.read_text(encoding="utf-8").strip()
-        if value:
-            return Path(value).expanduser()
-    return Path("UnrealPak")
-
-
-def set_unrealpak():
-    print(f"Current: {get_unrealpak()}")
-    value = input("UnrealPak path: ").strip().strip('"').strip("'")
-    if value:
-        CONFIG.write_text(value, encoding="utf-8")
-        print("[+] Saved.")
-
-
-def run_tool(args):
-    tool = get_unrealpak()
+def cfg_load():
+    p = CONFIG / "config.json"
     try:
-        p = subprocess.run([str(tool), *map(str, args)], text=True)
-    except FileNotFoundError:
-        print(f"[!] UnrealPak not found: {tool}")
-        print("    Use SETTINGS to configure its path.")
+        return json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        return {"unrealpak": ""}
+
+
+def cfg_save(c):
+    CONFIG.mkdir(parents=True, exist_ok=True)
+    (CONFIG / "config.json").write_text(json.dumps(c, indent=2), encoding="utf-8")
+
+
+def find_unrealpak():
+    c = cfg_load().get("unrealpak", "")
+    candidates = [c] if c else []
+    candidates += [
+        str(Path.cwd() / "UnrealPak"), str(Path.cwd() / "UnrealPak.exe"),
+        str(Path.home() / "UnrealPak"), str(Path.home() / "UnrealPak.exe"),
+    ]
+    for x in candidates:
+        if x and Path(x).is_file() and os.access(x, os.X_OK): return x
+        if x and Path(x).is_file(): return x
+    for name in ("UnrealPak", "UnrealPak.exe"):
+        hit = shutil.which(name)
+        if hit: return hit
+    return None
+
+
+def ask_path(prompt, default=None):
+    s = input(f"{prompt}" + (f" [{default}]" if default else "") + ": ").strip()
+    return Path(s or default).expanduser() if (s or default) else None
+
+
+def run_pak(args):
+    exe = find_unrealpak()
+    if not exe:
+        print("[!] UnrealPak پیدا نشد.")
+        print("    مسیر UnrealPak را در Settings ثبت کن.")
         return False
-    return p.returncode == 0
+    cmd = [exe] + args
+    print("\n$ " + " ".join(map(str, cmd)))
+    try:
+        p = subprocess.run(cmd, text=True, capture_output=True)
+        if p.stdout: print(p.stdout)
+        if p.stderr: print(p.stderr)
+        log(f"CMD={' '.join(map(str, cmd))} RC={p.returncode}")
+        return p.returncode == 0
+    except Exception as e:
+        print(f"[!] اجرای UnrealPak ناموفق بود: {e}")
+        log(f"ERROR {e}")
+        return False
 
 
 def unpack():
-    pak = Path(input("PAK file: ").strip().strip('"').strip("'")).expanduser()
-    if not pak.is_file():
-        print("[!] PAK file not found.")
-        return
-    out = Path(str(pak) + "_unpacked")
+    pak = ask_path("مسیر PAK")
+    if not pak or not pak.is_file(): print("[!] فایل پیدا نشد."); return
+    out = ask_path("مسیر خروجی", str(pak.with_suffix("")))
+    if out is None: return
     out.mkdir(parents=True, exist_ok=True)
-    print(f"[*] Extracting to {out}")
-    print("[+] Done." if run_tool([pak, "-Extract", out]) else "[!] Failed.")
+    print("[*] UNPACK...")
+    ok = run_pak([str(pak), "-Extract", str(out)])
+    print("[+] انجام شد." if ok else "[!] استخراج شکست خورد.")
 
 
-def repack():
-    src = Path(input("Folder to pack: ").strip().strip('"').strip("'")).expanduser()
-    if not src.is_dir():
-        print("[!] Folder not found.")
-        return
-    out = Path(input("Output PAK: ").strip().strip('"').strip("'")).expanduser()
+def repack(full=True):
+    folder = ask_path("پوشه استخراج‌شده")
+    if not folder or not folder.is_dir(): print("[!] پوشه پیدا نشد."); return
+    default = str(folder.parent / (folder.name + ("_repacked.pak" if full else ".pak")))
+    out = ask_path("مسیر PAK خروجی", default)
+    if not out: return
     out.parent.mkdir(parents=True, exist_ok=True)
-    print("[+] Done." if run_tool([f"-Create={src}", out]) else "[!] Failed.")
+    if out.exists():
+        backup = out.with_suffix(out.suffix + ".bak")
+        shutil.copy2(out, backup)
+        print(f"[*] بکاپ: {backup}")
+    ok = run_pak([f"-Create={folder}", str(out)])
+    print("[+] REPACK موفق بود." if ok else "[!] REPACK شکست خورد.")
 
 
-def edit():
-    folder = Path(input("Extracted folder: ").strip().strip('"').strip("'")).expanduser()
-    if folder.is_dir():
-        print(f"[+] Ready to edit normally: {folder}")
-    else:
-        print("[!] Folder not found.")
+def inject_edit():
+    folder = ask_path("پوشه استخراج‌شده برای EDIT")
+    if not folder or not folder.is_dir(): print("[!] پوشه پیدا نشد."); return
+    files = sum(1 for p in folder.rglob("*") if p.is_file())
+    print(f"[+] پوشه آماده و قابل ویرایش است. فایل‌ها: {files}")
+    print("    فایل‌ها را با ابزار دلخواه ویرایش کن؛ سپس REPACK را بزن.")
 
 
-def delete_folder():
-    folder = Path(input("Folder to delete: ").strip().strip('"').strip("'")).expanduser()
-    if not folder.is_dir():
-        print("[!] Folder not found.")
-        return
-    if input(f"Delete {folder}? [y/N]: ").lower() == "y":
-        shutil.rmtree(folder)
-        print("[+] Deleted.")
+def build_new():
+    print("[*] BUILD NEW PAK")
+    repack(full=False)
 
 
 def protect():
-    print("[!] PAK protection is engine/version dependent.")
-    print("    v0.1 does not invent encryption or corrupt files.")
+    print("PROTECT PAK: این نسخه رمزگذاری/دورزدن قفل بازی انجام نمی‌دهد.")
+    print("برای محافظت امن، از بکاپ و دسترسی فایل سیستم استفاده کن.")
 
 
-def main():
+def delete_folder():
+    folder = ask_path("پوشه برای حذف")
+    if not folder or not folder.is_dir(): print("[!] پوشه پیدا نشد."); return
+    if str(folder.resolve()) in ("/", str(Path.home().resolve())):
+        print("[!] حذف این مسیر مجاز نیست."); return
+    if input(f"حذف کامل {folder}? [y/N]: ").lower() != "y": return
+    shutil.rmtree(folder)
+    print("[+] حذف شد.")
+
+
+def settings():
+    c = cfg_load()
+    print(f"UnrealPak فعلی: {c.get('unrealpak') or '(auto)'}")
+    p = ask_path("مسیر UnrealPak", c.get("unrealpak") or None)
+    if p:
+        c["unrealpak"] = str(p)
+        cfg_save(c)
+        print("[+] ذخیره شد.")
+
+
+def menu():
     while True:
-        clear(); banner()
-        print("""
-  [1] UNPACK PAK
-  [2] INJECT / EDIT
-  [3] REPACK FULL
-  [4] REPACK TO PATH
-  [5] BUILD NEW PAK
-  [6] PROTECT PAK
-  [7] DELETE FOLDER
-  [8] SETTINGS
-  [0] EXIT
-""")
-        choice = input("PLEASE ENTER YOUR CHOICE: ").strip()
-        if choice == "1": unpack()
-        elif choice == "2": edit()
-        elif choice in ("3", "4", "5"): repack()
-        elif choice == "6": protect()
-        elif choice == "7": delete_folder()
-        elif choice == "8": set_unrealpak()
-        elif choice == "0": break
-        else: print("[!] Invalid choice.")
-        input("\nPress Enter to continue...")
+        print("\n╔══════════════════════════════╗")
+        print(f"║      ZONE TOOL v{VERSION}       ║")
+        print("║        TERMUX / ANDROID      ║")
+        print("╠══════════════════════════════╣")
+        print("║ 1  UNPACK PAK                ║")
+        print("║ 2  INJECT / EDIT             ║")
+        print("║ 3  REPACK FULL               ║")
+        print("║ 4  REPACK TO PATH            ║")
+        print("║ 5  BUILD NEW PAK             ║")
+        print("║ 6  PROTECT PAK               ║")
+        print("║ 7  DELETE FOLDER             ║")
+        print("║ 8  SETTINGS                  ║")
+        print("║ 0  EXIT                      ║")
+        print("╚══════════════════════════════╝")
+        try: n = input("ZONE > ").strip()
+        except (EOFError, KeyboardInterrupt): print(); return
+        if n == "1": unpack()
+        elif n == "2": inject_edit()
+        elif n == "3": repack(True)
+        elif n == "4": repack(False)
+        elif n == "5": build_new()
+        elif n == "6": protect()
+        elif n == "7": delete_folder()
+        elif n == "8": settings()
+        elif n == "0": return
+        else: print("[!] گزینه نامعتبر است.")
 
 
 if __name__ == "__main__":
-    main()
+    setup(); menu()
