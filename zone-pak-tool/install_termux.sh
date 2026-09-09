@@ -7,10 +7,12 @@ BIN="$HOME/.local/bin"
 mkdir -p "$BIN"
 
 pkg update -y
-pkg install -y python rust clang make pkg-config
+pkg install -y git python rust clang make pkg-config
 
 if command -v repak >/dev/null 2>&1; then
   echo "[+] repak already installed: $(command -v repak)"
+elif [ -x "$BIN/repak" ]; then
+  echo "[+] repak already installed: $BIN/repak"
 else
   echo "[*] Installing repak from its Rust source..."
   TMP="$(mktemp -d)"
@@ -23,11 +25,17 @@ else
 fi
 
 export PATH="$BIN:$PATH"
-python "$ROOT/zone_tool.py" <<'EOF'
-8
 
-0
-EOF
+if command -v repak >/dev/null 2>&1; then
+  echo "[+] Backend ready: $(command -v repak)"
+  repak --help | head -n 20 || true
+else
+  echo "[!] repak was not produced. See the cargo error above."
+  exit 1
+fi
 
 echo
-printf '%s\n' '[+] Backend setup finished.' 'Run:' "  export PATH=\"$BIN:\$PATH\"" "  python \"$ROOT/zone_tool.py\""
+echo "[+] Backend setup finished."
+echo "Run:"
+echo "  export PATH=\"$BIN:\$PATH\""
+echo "  python \"$ROOT/zone_tool.py\""
