@@ -32,7 +32,7 @@ jobs:
           worker = Path('admin/worker.js')
           s = worker.read_text(encoding='utf-8')
           embedded = 'const ADMIN_HTML = ' + json.dumps(html, ensure_ascii=False) + ';'
-          pattern = r'const ADMIN_HTML\\s*=\\s*(?:`(?:\\\\.|[^`])*`|"(?:\\\\.|[^"\\\\])*"|\\\'(?:\\\\.|[^\\\'\\\\])*\\\')\\s*;'
+          pattern = r'''const ADMIN_HTML\s*=\s*(?:`(?:\\.|[^`])*`|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')\s*;'''
           s, n = re.subn(pattern, embedded, s, count=1, flags=re.S)
           if n != 1:
               raise SystemExit('ADMIN_HTML declaration not found')
