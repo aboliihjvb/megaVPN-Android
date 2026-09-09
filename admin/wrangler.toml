@@ -1,9 +1,9 @@
 name = "megavpn-admin"
 main = "worker.js"
 compatibility_date = "2026-09-08"
+workers_dev = true
 
-# Create a D1 database, then replace the placeholder below with its ID.
 [[d1_databases]]
 binding = "DB"
 database_name = "megavpn"
-database_id = "REPLACE_WITH_D1_DATABASE_ID"
+database_id = "b0f03766-ed9e-47e7-bf6f-a091a6f79f5b"
